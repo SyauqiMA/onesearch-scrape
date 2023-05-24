@@ -8,20 +8,20 @@ class PilotTestSpider(scrapy.Spider):
     name = "pilot_test"
     custom_settings = {
         'FEEDS': {
-            'pilot_test_result.jsonl': {
+            'data_storage/pilot_test_result.jsonl': {
                 'format': 'jsonlines',
-                'overwrite': False
+                'overwrite': True
             }
         },
-        'LOG_LEVEL': 'ERROR'
+        'LOG_LEVEL': 'ERROR',
+        'CONCURRENT_REQUESTS': 32
     }
     page_amount = 246
     allowed_domains = ["onesearch.id"]
-    start_urls = (f"https://onesearch.id/Search/Results?type=AllFields&filter%5B%5D=format%3A%22Thesis%3ABachelors%22&filter%5B%5D=publishDate%3A%222022%22&page={i+1}" for i in range(page_amount)) # All in one list
-    # start_urls = ["https://onesearch.id/Search/Results?type=AllFields&filter%5B%5D=format%3A%22Thesis%3ABachelors%22&filter%5B%5D=publishDate%3A%222022%22"] # One start page
+    start_urls = (f"https://onesearch.id/Search/Results?type=AllFields&filter%5B%5D=format%3A%22Thesis%3ABachelors%22&filter%5B%5D=publishDate%3A%222022%22&page={i+1}" for i in range(0, page_amount, 10))
 
     def parse(self, response):
-        print(f'Scraping page {response.url.split("=")[-1]}...')
+        print(f'Scraping page {response.url}...')
 
         # get all document link in a page
         ios_number_links = response.css('table.w-100 tr:nth-child(2) a::attr(href)').getall()
@@ -33,14 +33,14 @@ class PilotTestSpider(scrapy.Spider):
                                      callback=self.parse_ajax_tab,
                                      cb_kwargs={'ios_link': doc_link})
         
-        # # Handle Pagination link
-        # pagination_link_selector = "ul.pagination li:nth-last-child(2) a::text"
-        # pagination_link = response.css(pagination_link_selector).get()
-        # # print(pagination_link)
-        # if("Next" in pagination_link):
-        #     pagination_link_href_selector = "ul.pagination li:nth-last-child(2) a::attr(href)"
-        #     pagination_link_href = response.css(pagination_link_href_selector).get()
-        #     yield response.follow(pagination_link_href, callback=self.parse)
+        # Handle Pagination link
+        pagination_link_selector = "ul.pagination li:nth-last-child(2) a::text"
+        pagination_link = response.css(pagination_link_selector).get()
+        # print(pagination_link)
+        if("Next" in pagination_link):
+            pagination_link_href_selector = "ul.pagination li:nth-last-child(2) a::attr(href)"
+            pagination_link_href = response.css(pagination_link_href_selector).get()
+            yield response.follow(pagination_link_href, callback=self.parse)
     
 
     def parse_ajax_tab(self, response, **kwargs):
