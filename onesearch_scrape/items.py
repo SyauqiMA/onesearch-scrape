@@ -12,7 +12,7 @@ class PilotTestItem(scrapy.Item):
     published_year = scrapy.Field()
     institution = scrapy.Field()
     abstract_text = scrapy.Field()
-    is_xml = scrapy.Field()
+    url = scrapy.Field()
 
 class CompleteDataItem(scrapy.Item):
     title = scrapy.Field()

@@ -1,6 +1,7 @@
 import scrapy
 from onesearch_scrape.items import PilotTestItem
-from scrapy.loader import ItemLoader
+import pandas as pd
+import xml.etree.ElementTree as ET
 
 
 class PilotTestSpider(scrapy.Spider):
@@ -11,80 +12,58 @@ class PilotTestSpider(scrapy.Spider):
                 'format': 'jsonlines',
                 'overwrite': False
             }
-        }
+        },
+        'LOG_LEVEL': 'ERROR'
     }
+    page_amount = 246
     allowed_domains = ["onesearch.id"]
-    start_urls = ["https://onesearch.id/Search/Results?type=AllFields&filter%5B%5D=format%3A%22Thesis%3ABachelors%22&filter%5B%5D=publishDate%3A%222022%22"]
+    start_urls = (f"https://onesearch.id/Search/Results?type=AllFields&filter%5B%5D=format%3A%22Thesis%3ABachelors%22&filter%5B%5D=publishDate%3A%222022%22&page={i+1}" for i in range(page_amount)) # All in one list
+    # start_urls = ["https://onesearch.id/Search/Results?type=AllFields&filter%5B%5D=format%3A%22Thesis%3ABachelors%22&filter%5B%5D=publishDate%3A%222022%22"] # One start page
 
     def parse(self, response):
-        print(response.url)
+        print(f'Scraping page {response.url.split("=")[-1]}...')
+
         # get all document link in a page
-        for doc_link in response.css('table.w-100 tr:nth-child(2) a::attr(href)').getall():
-            yield response.follow(doc_link, callback=self.parse_document_page)
+        ios_number_links = response.css('table.w-100 tr:nth-child(2) a::attr(href)').getall()
+
+        for doc_link in ios_number_links:
+            ajax_tab_link = "https://onesearch.id" + doc_link + "/AjaxTab"
+            yield scrapy.FormRequest(ajax_tab_link,
+                                     formdata={"tab": "details"},
+                                     callback=self.parse_ajax_tab,
+                                     cb_kwargs={'ios_link': doc_link})
         
-        # TODO: Handle Pagination link
-        # this is a bit dumb...
-        pagination_link_selector = "ul.pagination li:nth-last-child(2) a::text"
-        pagination_link = response.css(pagination_link_selector).get()
-        # print(pagination_link)
-        if("Next" in pagination_link):
-            pagination_link_href_selector = "ul.pagination li:nth-last-child(2) a::attr(href)"
-            pagination_link_href = response.css(pagination_link_href_selector).get()
-            yield response.follow(pagination_link_href, callback=self.parse)
+        # # Handle Pagination link
+        # pagination_link_selector = "ul.pagination li:nth-last-child(2) a::text"
+        # pagination_link = response.css(pagination_link_selector).get()
+        # # print(pagination_link)
+        # if("Next" in pagination_link):
+        #     pagination_link_href_selector = "ul.pagination li:nth-last-child(2) a::attr(href)"
+        #     pagination_link_href = response.css(pagination_link_href_selector).get()
+        #     yield response.follow(pagination_link_href, callback=self.parse)
     
-    def parse_document_page(self, response):
-        title_selector = "div.col-sm-9 h3::text"
-        author_selector = "span[property='author'] a::text"
-        pub_year_selector = "span[property='publicationDate']::text"
-        institution_selector = ".table-holding tr:nth-child(3) td::text"
 
-        # TODO: get the above 4 elements
-        title = response.css(title_selector).get()
-        author = response.css(author_selector).get()
-        pub_year = response.css(pub_year_selector).get()
-        institution = response.css(institution_selector).get()
-
-        # Change url to /AjaxTab
-        tab_url = f"{response.url}/AjaxTab"
-
-        # POST request to the ajaxtab, sending {"tab": "toc"}
-        yield scrapy.FormRequest(tab_url, formdata={"tab": "toc"}, callback=self.parse_abstract_from_toc, cb_kwargs={"title": title, "author": author, "pub_year": pub_year, "institution": institution})
-
-    
-    def parse_abstract_from_toc(self, response, **kwargs):
-        # Check if abstract is here
-        abstract_toc_selector = "ul.toc li:first-child::text"
-        abstract_found = False
-        abstract = response.css(abstract_toc_selector).get()
-
-        if(abstract):
-            kwargs["abstract"] = abstract
-            kwargs["is_xml"] = 0
-            abstract_found = True
-
-        # if not, send {"tab": "details"} and get the full XML in 'fullrecord' for cleaning later
-        kwargs["abstract_found"] = abstract_found # another way to do this???
-        yield scrapy.FormRequest(response.url, formdata={"tab": "details"}, callback=self.parse_xml_from_details, cb_kwargs=kwargs)
-
-    def parse_xml_from_details(self, response, **kwargs):
-        if(not kwargs["abstract_found"]): # another way to do this???
-            fullrecord_xml_selector = "table tr:nth-child(2) td::text"
-            fullrecord_xml = response.css(fullrecord_xml_selector).get()
-            kwargs["abstract"] = fullrecord_xml
-            kwargs["is_xml"] = 1
-        # print(kwargs)
+    def parse_ajax_tab(self, response, **kwargs):
+        raw_html = response.body
+        df = pd.read_html(raw_html, index_col=0)[0].transpose()
         item = PilotTestItem()
-        item['title'] = kwargs["title"]
-        item['author'] = kwargs["author"]
-        item['published_year'] = kwargs["pub_year"]
-        item['institution'] = kwargs["institution"]
-        item['abstract_text'] = kwargs["abstract"]
-        item['is_xml'] = kwargs["is_xml"]
-        # print("Item created?")
+
+        item["title"] = df['title'].values[0] if 'title' in df.columns else "None"
+        item["author"] = df['author'].values[0] if 'author' in df.columns else "None"
+        item["published_year"] = df['publishDate'].values[0] if 'publishDate' in df.columns else "None"
+        item["institution"] = df['institution'].values[0] if 'institution' in df.columns else "None"
+        item["abstract_text"] = self.get_abstract(df)
+        item["url"] = kwargs['ios_link']
+
         yield item
 
-    # def load_items(self, response, **kwargs):
-        
-        
-
-
+    def get_abstract(self, df: pd.DataFrame):
+        fullrecord_xml = ET.fromstring(df['fullrecord'].values[0].strip())
+        abstract_tag = fullrecord_xml.find('abstract')
+        description_tag = fullrecord_xml.find('description')
+        if (abstract_tag is not None):
+            return abstract_tag.text
+        elif (description_tag is not None):
+            return description_tag.text
+        else:
+            return "None"
