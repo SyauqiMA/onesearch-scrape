@@ -1,4 +1,6 @@
 __pycache__
+data_storage
+crawl_jobs
 pilot_test_result.jsonl
 ajax_tab_details.html
 ajax_tab_toc.html
