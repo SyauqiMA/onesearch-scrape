@@ -1,25 +1,33 @@
 import scrapy
-from onesearch_scrape.items import PilotTestItem
+from onesearch_scrape.items import CompleteDataItem
 import pandas as pd
 import xml.etree.ElementTree as ET
+import re
 
 
-class PilotTestSpider(scrapy.Spider):
-    name = "pilot_test"
+class CompleteDataSpider(scrapy.Spider):
+    name = "complete_data"
     custom_settings = {
         'FEEDS': {
-            'data_storage/pilot_test_result.jsonl': {
+            'data_storage/data_result_final_test.jsonl': {
                 'format': 'jsonlines',
-                'overwrite': True
+                'overwrite': False
             }
         },
         'LOG_LEVEL': 'ERROR',
-        'AUTOTHROTTLE_TARGET_CONCURRENCY': 20,
+        'LOG_FILE': 'spider_logs/complete_dataspider.log',
+        # 'CONCURRENT_REQUESTS': 200,
+        # 'DOWNLOAD_DELAY': 0.2,
+        # 'AUTOTHROTTLE_ENABLED': False,
+        'AUTOTHROTTLE_TARGET_CONCURRENCY': 10.0,
+        # 'HTTPCACHE_IGNORE_MISSING': True,
         'AUTOTHROTTLE_START_DELAY': 1
     }
-    page_amount = 246
+
+    PAGE_AMOUNT = 41678 # look at the target url
+
     allowed_domains = ["onesearch.id"]
-    start_urls = (f"https://onesearch.id/Search/Results?type=AllFields&filter%5B%5D=format%3A%22Thesis%3ABachelors%22&filter%5B%5D=publishDate%3A%222022%22&page={i+1}" for i in range(0, page_amount, 12))
+    start_urls = [f"https://onesearch.id/Search/Results?type=AllFields&filter%5B%5D=format%3A%22Thesis%3ABachelors%22&page={i+1}" for i in range(0, PAGE_AMOUNT, PAGE_AMOUNT // 4100)]
 
     def parse(self, response):
         print(f'Scraping page {response.url}...')
@@ -42,19 +50,27 @@ class PilotTestSpider(scrapy.Spider):
             pagination_link_href_selector = "ul.pagination li:nth-last-child(2) a::attr(href)"
             pagination_link_href = response.css(pagination_link_href_selector).get()
             yield response.follow(pagination_link_href, callback=self.parse)
-    
+        
 
     def parse_ajax_tab(self, response, **kwargs):
+        filter_regex = r'[\n\t]+|[ ]{2,}'
         raw_html = response.body
         df = pd.read_html(raw_html, index_col=0)[0].transpose()
-        item = PilotTestItem()
+        item = CompleteDataItem()
 
         item["title"] = df['title'].values[0] if 'title' in df.columns else "None"
         item["author"] = df['author'].values[0] if 'author' in df.columns else "None"
         item["published_year"] = df['publishDate'].values[0] if 'publishDate' in df.columns else "None"
         item["institution"] = df['institution'].values[0] if 'institution' in df.columns else "None"
+        item["library"] = df['library'].values[0] if 'library' in df.columns else "None"
+        item["collection"] = df['collection'].values[0] if 'collection' in df.columns else "None"
         item["abstract_text"] = self.get_abstract(df)
-        item["url"] = kwargs['ios_link']
+        item["ios_url"] = kwargs['ios_link']
+        item["repo_url"] = re.split(filter_regex, df['url'].values[0]) if 'url' in df.columns else "None"
+        item["subject_area"] = re.split(filter_regex, df['subject_area'].values[0]) if 'subject_area' in df.columns else "None"
+        item["topic"] = re.split(filter_regex, df['topic'].values[0]) if 'topic' in df.columns else "None"
+        item["format"] = re.split(filter_regex, df['format'].values[0]) if 'format' in df.columns else "None"
+        item["language"] = df['language'].values[0] if 'language' in df.columns else "None"
 
         yield item
 

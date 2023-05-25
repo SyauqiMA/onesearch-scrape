@@ -9,7 +9,6 @@ from itemadapter import ItemAdapter
 
 
 class OnesearchScrapePipeline:
-    # def open_spider(self, spider):
 
     def process_item(self, item, spider):
         return item
