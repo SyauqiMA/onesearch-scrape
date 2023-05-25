@@ -14,11 +14,12 @@ class PilotTestSpider(scrapy.Spider):
             }
         },
         'LOG_LEVEL': 'ERROR',
-        'CONCURRENT_REQUESTS': 32
+        'AUTOTHROTTLE_TARGET_CONCURRENCY': 20,
+        'AUTOTHROTTLE_START_DELAY': 1
     }
     page_amount = 246
     allowed_domains = ["onesearch.id"]
-    start_urls = (f"https://onesearch.id/Search/Results?type=AllFields&filter%5B%5D=format%3A%22Thesis%3ABachelors%22&filter%5B%5D=publishDate%3A%222022%22&page={i+1}" for i in range(0, page_amount, 10))
+    start_urls = (f"https://onesearch.id/Search/Results?type=AllFields&filter%5B%5D=format%3A%22Thesis%3ABachelors%22&filter%5B%5D=publishDate%3A%222022%22&page={i+1}" for i in range(0, page_amount, 12))
 
     def parse(self, response):
         print(f'Scraping page {response.url}...')
