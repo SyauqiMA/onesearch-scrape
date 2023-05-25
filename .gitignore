@@ -2,5 +2,4 @@ __pycache__
 data_storage
 .scrapy
 crawl_jobs
-crawl-jobs
 spider_logs
