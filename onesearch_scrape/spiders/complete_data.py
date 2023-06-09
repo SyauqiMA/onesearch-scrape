@@ -66,10 +66,10 @@ class CompleteDataSpider(scrapy.Spider):
         item["collection"] = df['collection'].values[0] if 'collection' in df.columns else "None"
         item["abstract_text"] = self.get_abstract(df)
         item["ios_url"] = kwargs['ios_link']
-        item["repo_url"] = re.split(filter_regex, df['url'].values[0]) if 'url' in df.columns else "None"
-        item["subject_area"] = re.split(filter_regex, df['subject_area'].values[0]) if 'subject_area' in df.columns else "None"
-        item["topic"] = re.split(filter_regex, df['topic'].values[0]) if 'topic' in df.columns else "None"
-        item["format"] = re.split(filter_regex, df['format'].values[0]) if 'format' in df.columns else "None"
+        item["repo_url"] = re.split(filter_regex, df['url'].values[0]) if 'url' in df.columns else []
+        item["subject_area"] = re.split(filter_regex, df['subject_area'].values[0]) if 'subject_area' in df.columns else []
+        item["topic"] = re.split(filter_regex, df['topic'].values[0]) if 'topic' in df.columns else []
+        item["format"] = re.split(filter_regex, df['format'].values[0]) if 'format' in df.columns else []
         item["language"] = df['language'].values[0] if 'language' in df.columns else "None"
 
         yield item
