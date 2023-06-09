@@ -3,3 +3,4 @@ data_storage
 .scrapy
 crawl_jobs
 spider_logs
+helpers
